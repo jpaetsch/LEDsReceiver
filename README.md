@@ -11,7 +11,7 @@
 The Arduino receiver half of the code for an LED lights project. Receives instructions via Bluetooth and sets up the lightstrip pattern accordingly.
 
 ## Setup & Usage
-Download .ino Arduino file onto the Arduino board with a HC-05 Bluetooth module. Parse for new instructions while the lights are set to one of many possible pattern options.
+Download .ino Arduino file onto the Arduino board with a HC-05 Bluetooth module. Connect via Bluetooth with a phone with the app installed to control the LED lightstrip.
 
 ## Potential Improvements
 Just getting started on this project; will update the REAME eventually with what can be improved on.
