@@ -14,9 +14,10 @@ The Arduino receiver half of the code for an LED lights project. Receives instru
 Download .ino Arduino file onto the Arduino board with a HC-05 Bluetooth module. Connect via Bluetooth with a phone with the app installed to control the LED lightstrip.
 
 ## Potential Improvements
-Just getting started on this project; will update the REAME eventually with what can be improved on.
+Just getting started on this project; will update the README eventually with what can be improved on.
 
 ## Technologies
+* API 28: Android 9.0 (Pie)
 * MEGA2560 (not official Arduino but same hardware) board
 * HC-05 Bluetooth module
 * WS2812B LED lights
@@ -25,7 +26,7 @@ Just getting started on this project; will update the REAME eventually with what
 * FastLED library
 
 ## Inspiration
-Wanted to set up a lightstrip and have it controllable by an app I program from my phone (will set up a controller repository).  Also want to eventually connect to the Spotify API to automatically set the lights depending on songs, genres, etc and have 'smart, responsive' patterns.
+Wanted to set up a lightstrip and have it controllable by an app I program from my phone (also see the controller app repository).  Also want to eventually connect to the Spotify API to automatically set the lights depending on songs, genres, etc and have 'smart, responsive' patterns.
 
 ## Sources
-Online resources used extensively.  Code examples derived from to figure out the FastLED library.
+Online resources used extensively.  Code examples derived from to figure out the FastLED library and program Bluetooth functionality in Android.
