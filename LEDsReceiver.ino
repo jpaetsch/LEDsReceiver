@@ -48,7 +48,7 @@ void loop() {
         for(int i = 0; i < MAX_INPUT; ++i) {   // read 24 instruction parameter bytes into input array
           input[i] = Serial.read();
         }
-        if(Serial.read() == 61) { // '>' was read as last character
+        if(Serial.read() == 62) { // '>' was read as last character
           validInput = true;  // All parameters have been met for serial-read input; assume to be a valid instruction
         } else {
           Serial.println("Error: last delimiter");
