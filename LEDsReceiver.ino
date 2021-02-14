@@ -18,7 +18,7 @@ unsigned long timeNoComm;   // long timeout if no communication is received
 bool validInput;
 
 // Explanation Notes
-// 1) Communication protocol is   <----------------------->  ie. 24 bytes encased by 2 <> delimiters
+// 1) Communication protocol is   <----------------------->   ie. 24 bytes encased by 2 <> delimiters
 // 2) Three different types of serial messages sent to the app - Private: | Error: | Status:   the first letter is stripped
 //    by the controller app to see the behaviour - Private ones are meant to be hidden, Error ones emphasized to the user, and
 //    Status displayed to the user ... thinking about logging all of these eventually but right now they are just used to affect
@@ -45,7 +45,7 @@ void loop() {
   
   /* No new pattern for a long time */
   if((millis()-timeNoComm) > MAX_TIME) {
-    Serial.println("Error: no communication timeout")
+    Serial.println("Error: no communication timeout");
     // TODO set the currentPattern to be OFF or blank
   }
 
@@ -76,14 +76,31 @@ void loop() {
   if(validInput) {
     Serial.println("Status: received possibly valid input");
     validInput = false;
-    // TODO PARSE INPUT USING CATEGORIES AND DO SOMETHING W PATTERN OBJECT
+    setupPattern();
+  }
+
+
+}
+
+
+/* Function to parse the entire pattern buffer, and set up the global pattern object */
+void setupPattern() {
+  switch(input[0]) {
+    case 1:
+      fill_solid(leds, NUM_LEDS, CRGB::Red);
+      FastLED.show();
+      break;
+    case 0:
+      FastLED.clear();
+      FastLED.show();
+      break;
   }
 }
 
 
 /* Function to clear the entire pattern buffer, setting it to default '-' values */
 void clearInputArray() {
-  Serial.println("Private: cleared input array")
+  Serial.println("Private: cleared input array");
   for(int i = 0; i < MAX_INPUT; ++i) {
     input[i] = 45;
   }
@@ -92,7 +109,7 @@ void clearInputArray() {
 
 /* Function to clear the entire serial buffer */
 void clearBuffer() {
-  Serial.println("Private: cleared serial buffer")
+  Serial.println("Private: cleared serial buffer");
   while(Serial.available() > 0) {
     Serial.read();
   }
