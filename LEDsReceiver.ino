@@ -118,6 +118,8 @@ void setupPattern() {
 
     default:
       Serial.println("Error: no pattern index found");
+      clearInputArray();
+      break;
   }
 }
 
@@ -134,7 +136,7 @@ void clearInputArray() {
 /* Function to clear the entire serial buffer */
 void clearBuffer() {
   Serial.println("Private: cleared serial buffer");
-  while(Serial.available() > 0) {
+  do {
     Serial.read();
-  }
+  } while(Serial.available() > 0);
 }
