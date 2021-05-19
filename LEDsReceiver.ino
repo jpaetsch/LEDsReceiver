@@ -1,60 +1,77 @@
 #include <FastLED.h>
+#include "pattern.h"
+#include "patternOff.h"
+#include "patternSolid.h"
 
-// TODO eventually make all of these adjustable on the app settings side
+
+// TODO possibly make all of these adjustable on the app settings side
 #define NUM_LEDS 900
 #define LED_TYPE WS2812B
 #define COLOR_ORDER GRB
 #define DATA_PIN 7
-#define DEFAULT_BRIGHTNESS 100
+#define DEFAULT_BRIGHTNESS 128
 
-#define MAX_INPUT 24        // The max number specified by communication protocol I set up ie. 24 bytes encased by < >
-#define MAX_TIME 10000000   // ~2.6 hours before it auto-shuts down the pattern that's been holding
-#define TIMEOUT 2000        // 2 seconds before it no longer waits to receive the current pattern info
+#define MAX_INPUT 24                // The max number specified by communication protocol I set up ie. 24 bytes encased by < >
+#define MAX_TIME 10000000           // ~2.6 hours before it auto-shuts down the pattern that's been holding
+#define TIMEOUT 2000                // 2 seconds before it no longer waits to receive the current pattern info
+#define DEFAULT_REFRESH_RATE 10000   // 10 seconds is the default, unhurried refresh rate - the changeable
 
 
 CRGBArray<NUM_LEDS> leds;   // led array
+Pattern *pattern;    // current pattern
 byte input[MAX_INPUT];      // parse data one byte at a time
 unsigned long timeNoComm;   // long timeout if no communication is received
-unsigned int timeWaiting;   // short timeout for filling the instruction buffer
-bool validInput;
+uint16_t timeWaiting;   // short timeout for filling the instruction buffer
+uint16_t timeRefreshRate;   // timer for establishing the frame rate based on the pattern
+bool updateNeeded;
 
 // Explanation Notes
 // 1) Communication protocol is   <----------------------->   ie. 24 bytes encased by 2 <> delimiters
-// 2) Three different types of serial messages sent to the app - Private: | Error: | Status:   the first letter is stripped
-//    by the controller app to see the behaviour - Private ones are meant to be hidden, Error ones emphasized to the user, and
-//    Status displayed to the user ... thinking about logging all of these eventually but right now they are just used to affect
-//    UI elements
+// 2) Two different types of serial messages sent to the app - Error: | Status:   the first letter is stripped
+//    by the controller app to set severity, display, etc.
 
 
 void setup() {
   delay(3000);    // safety startup delay
-  FastLED.addLeds<LED_TYPE,DATA_PIN,COLOR_ORDER>(leds, NUM_LEDS);    // look into if .setCorrection(TypicalLEDStrip) is necessary
+  FastLED.addLeds<LED_TYPE,DATA_PIN,COLOR_ORDER>(leds, NUM_LEDS);
   FastLED.setBrightness(DEFAULT_BRIGHTNESS);
   
   Serial.begin(9600);
 
   /* Initialize elements */
+  pattern = new PatternOff(leds, NUM_LEDS);
+  updateNeeded = false;
   clearInputArray();
   timeNoComm = millis();
-  validInput = false;
+  
 }
 
 
 void loop() {
-
-  validInput = false;
   
   /* No new pattern for a long time */
   if((millis()-timeNoComm) > MAX_TIME) {
     Serial.println("Error: no communication timeout");
-    // TODO set the currentPattern to be OFF or blank
+    turnOff();
   }
   
-
   if(readPattern()) {
-    Serial.println("Status: received possibly valid input");
-    setupPattern();
+    Serial.println("Status: read in the pattern and its parameters");
+    if(setupPattern()) {
+      Serial.println("Status: identified the pattern");
+      updateNeeded = pattern->updateNeeded();
+      timeNoComm = millis();
+      pattern->initPattern();
+      FastLED.show();
+    }
   }
+
+
+  // Actual framerate will be controlled within each pattern's update function
+  if(updateNeeded) {
+    pattern->updatePattern();
+    FastLED.show();
+  }  
 }
 
 
@@ -101,41 +118,35 @@ bool readPattern() {
 
 
 /* Function to parse the entire pattern buffer, and set up the global pattern object */
-// TODO turn into a boolean similar to readPattern()
-void setupPattern() {  
-  switch((char) input[0]) {
-    case '0':
-      Serial.println("Status: matches off pattern");
-      FastLED.clear();
-      FastLED.show();
-      break;
+bool setupPattern() {  
+  switch(input[0]) {
+    case 0:
+      Serial.println("Status: pattern id matches off pattern");
+      return true;
       
-    case '1':
-      Serial.println("Status: matches solid pattern");
-      fill_solid(leds, NUM_LEDS, CRGB::Red);
-      FastLED.show();
-      break;
+    case 1:
+      Serial.println("Status: pattern id matches solid pattern");
+      pattern = new patternSolid(leds, NUM_LEDS, input[1], input[2], input[3]);
+      return true;
 
     default:
-      Serial.println("Error: no pattern index found");
-      clearInputArray();
-      break;
+      Serial.println("Error: pattern id not found");
+      return false;
   }
 }
 
 
 /* Function to clear the entire pattern buffer, setting it to default '-' values */
 void clearInputArray() {
-  Serial.println("Private: cleared input array");
+  Serial.println("Status: cleared input array");
   for(int i = 0; i < MAX_INPUT; ++i) {
     input[i] = byte('-');
   }
 }
 
-
 /* Function to clear the entire serial buffer */
 void clearBuffer() {
-  Serial.println("Private: cleared serial buffer");
+  Serial.println("Status: cleared serial buffer");
   do {
     Serial.read();
   } while(Serial.available() > 0);
