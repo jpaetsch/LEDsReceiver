@@ -11,8 +11,8 @@
 #define DATA_PIN 7
 
 #define MAX_INPUT 24        // The max number specified by communication protocol I set up ie. 24 bytes encased by < >
-#define MAX_TIME 5000       // ~2.78 hours before it auto-shuts down the pattern that's been holding
-#define TIMEOUT 10000000    // 2 seconds before it no longer waits to receive the current pattern info
+#define MAX_TIME 10000000   // ~2.78 hours before it auto-shuts down the pattern that's been holding
+#define TIMEOUT 2000        // 2 seconds before it no longer waits to receive the current pattern info
 
 
 CRGBArray<NUM_LEDS> leds;   // led array
