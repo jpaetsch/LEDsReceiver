@@ -9,21 +9,18 @@
 #define LED_TYPE WS2812B
 #define COLOR_ORDER GRB
 #define DATA_PIN 7
-#define DEFAULT_BRIGHTNESS 128
 
-#define MAX_INPUT 24                // The max number specified by communication protocol I set up ie. 24 bytes encased by < >
-#define MAX_TIME 10000000           // ~2.6 hours before it auto-shuts down the pattern that's been holding
-#define TIMEOUT 2000                // 2 seconds before it no longer waits to receive the current pattern info
-#define DEFAULT_REFRESH_RATE 10000   // 10 seconds is the default, unhurried refresh rate - the changeable
+#define MAX_INPUT 24        // The max number specified by communication protocol I set up ie. 24 bytes encased by < >
+#define MAX_TIME 5000       // ~2.78 hours before it auto-shuts down the pattern that's been holding
+#define TIMEOUT 10000000    // 2 seconds before it no longer waits to receive the current pattern info
 
 
 CRGBArray<NUM_LEDS> leds;   // led array
-Pattern *pattern;    // current pattern
+Pattern *pattern;           // current pattern
 byte input[MAX_INPUT];      // parse data one byte at a time
-unsigned long timeNoComm;   // long timeout if no communication is received
-uint16_t timeWaiting;   // short timeout for filling the instruction buffer
-uint16_t timeRefreshRate;   // timer for establishing the frame rate based on the pattern
-bool updateNeeded;
+unsigned long timeNoComm;   // longer overall timeout if no successful pattern change communication is received
+unsigned long timeWaiting;  // short timeout for filling the instruction buffer
+
 
 // Explanation Notes
 // 1) Communication protocol is   <----------------------->   ie. 24 bytes encased by 2 <> delimiters
@@ -34,13 +31,11 @@ bool updateNeeded;
 void setup() {
   delay(3000);    // safety startup delay
   FastLED.addLeds<LED_TYPE,DATA_PIN,COLOR_ORDER>(leds, NUM_LEDS);
-  FastLED.setBrightness(DEFAULT_BRIGHTNESS);
   
   Serial.begin(9600);
 
   /* Initialize elements */
   pattern = new PatternOff(leds, NUM_LEDS);
-  updateNeeded = false;
   clearInputArray();
   timeNoComm = millis();
   
@@ -50,28 +45,25 @@ void setup() {
 void loop() {
   
   /* No new pattern for a long time */
-  if((millis()-timeNoComm) > MAX_TIME) {
+  if((millis()-timeNoComm) > MAX_TIME && pattern->getPatternID() != 0) {
     Serial.println("Error: no communication timeout");
-    turnOff();
+    delete pattern;
+    pattern = new PatternOff(leds, NUM_LEDS);
+    pattern->initPattern();
   }
   
   if(readPattern()) {
     Serial.println("Status: read in the pattern and its parameters");
     if(setupPattern()) {
       Serial.println("Status: identified the pattern");
-      updateNeeded = pattern->updateNeeded();
       timeNoComm = millis();
       pattern->initPattern();
-      FastLED.show();
     }
   }
 
 
-  // Actual framerate will be controlled within each pattern's update function
-  if(updateNeeded) {
-    pattern->updatePattern();
-    FastLED.show();
-  }  
+  // Framerate will be controlled within each pattern classes update function
+  pattern->updatePattern();
 }
 
 
@@ -122,11 +114,14 @@ bool setupPattern() {
   switch(input[0]) {
     case 0:
       Serial.println("Status: pattern id matches off pattern");
+      delete pattern;
+      pattern = new PatternOff(leds, NUM_LEDS);
       return true;
       
     case 1:
       Serial.println("Status: pattern id matches solid pattern");
-      pattern = new patternSolid(leds, NUM_LEDS, input[1], input[2], input[3]);
+      delete pattern;
+      pattern = new PatternSolid(leds, NUM_LEDS, input[1], input[2], input[3]);
       return true;
 
     default:

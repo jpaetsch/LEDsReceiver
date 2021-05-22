@@ -1,7 +1,9 @@
 #ifndef PATTERNOFF_H
 #define PATTERNOFF_H
 
+#include <FastLED.h>
 #include "pattern.h"
+
 
 class PatternOff: public Pattern {
   private:      
@@ -15,18 +17,19 @@ class PatternOff: public Pattern {
     
     }
 
-    bool updateNeeded();
+    uint8_t getPatternID();
     void initPattern();
     void updatePattern();
 };
 
 
-bool PatternOff::updateNeeded() {
-  return false;
+uint8_t PatternOff::getPatternID() {
+  return 0;
 }
 
 void PatternOff::initPattern() {
   FastLED.clear();
+  FastLED.show();
 }
 
 void PatternOff::updatePattern() {

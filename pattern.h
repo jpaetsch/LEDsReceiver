@@ -16,10 +16,10 @@ class Pattern {
     virtual ~Pattern() {
       
     }
-    
-    virtual bool updateNeeded() = 0;
-    virtual void initPattern() = 0;
-    virtual void updatePattern() = 0;
+
+    virtual uint8_t getPatternID() = 0;     // This function must be kept sync with the resource values for pattern IDs in the controller
+    virtual void initPattern() = 0;         // This function will be run once to start off the pattern
+    virtual void updatePattern() = 0;       // This function will be continually looped through and re-draw/update the pattern
 };
 
 
