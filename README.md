@@ -2,6 +2,7 @@
 
 ## Table of Contents
 * [Summary](#summary)
+* [Architecture](#architecture)
 * [Setup & Usage](#setup-&-usage)
 * [Technologies](#technologies)
 * [Inspiration](#inspiration)
@@ -9,6 +10,10 @@
 
 ## Summary
 The ESP32 receiver half of the code for an LED lights project. Receives instructions via HTTP and sets up the lightstrip pattern accordingly.
+
+## Architecture
+![General Architecture Diagram](documentation/LEDs%20Project%20General%20Architecture.png)
+[Edit Source Document](https://app.diagrams.net/?src=about#G1grlmBMnNhJxIqO1p9Py0KbEwqqTXZHo6)
 
 ## Setup & Usage
 Download .ino Arduino file onto the ESP32 module. Connect via the same network as a phone with the app installed to control the LED lightstrip.
