@@ -7,12 +7,12 @@
 
 class PatternSolid: public Pattern {
   private:      
-    byte hue;
-    byte sat;
-    byte val;
+    uint8_t hue;
+    uint8_t sat;
+    uint8_t val;
   
   public:
-    PatternSolid(CRGB* inLeds, uint16_t inNumLeds, byte inHue, byte inSat, byte inVal): Pattern(inLeds, inNumLeds) {
+    PatternSolid(CRGB* inLeds, uint16_t inNumLeds, uint8_t inHue, uint8_t inSat, uint8_t inVal): Pattern(inLeds, inNumLeds) {
       hue = inHue;
       sat = inSat;
       val = inVal;

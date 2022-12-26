@@ -1,148 +1,189 @@
+#include <Arduino.h>
+#include <ArduinoJson.h>
 #include <FastLED.h>
+#include <WebServer.h>
+#include <WiFi.h>
+
 #include "pattern.h"
 #include "patternOff.h"
 #include "patternSolid.h"
 
 
-// TODO possibly make all of these adjustable on the app settings side
-#define NUM_LEDS 900
-#define LED_TYPE WS2812B
-#define COLOR_ORDER GRB
-#define DATA_PIN 7
+// Wifi Configuration Constants
+const char* SSID = "xxx";             // Network name to connect to
+const char* PWD = "xxx";               // Network password
+const char* HOSTNAME = "xxx";  // Hostname to easily scan for and identify device on the network
 
-#define MAX_INPUT 24        // The max number specified by communication protocol I set up ie. 24 bytes encased by < >
-#define MAX_TIME 10000000   // ~2.78 hours before it auto-shuts down the pattern that's been holding
-#define TIMEOUT 2000        // 2 seconds before it no longer waits to receive the current pattern info
+// FastLED Configuration Constants
+#define LED_TYPE WS2812B                      // LED chipset
+#define COLOR_ORDER GRB                       // Expected color ordering for setting proper values
+#define NUM_LEDS 900                          // Number of LEDs in the overall system
+#define DATA_PIN 12                           // GPIO pin connected to the strip
 
-
-CRGBArray<NUM_LEDS> leds;   // led array
-Pattern *pattern;           // current pattern
-byte input[MAX_INPUT];      // parse data one byte at a time
-unsigned long timeNoComm;   // longer overall timeout if no successful pattern change communication is received
-unsigned long timeWaiting;  // short timeout for filling the instruction buffer
-
-
-// Explanation Notes
-// 1) Communication protocol is   <----------------------->   ie. 24 bytes encased by 2 <> delimiters
-// 2) Two different types of serial messages sent to the app - Error: | Status:   the first letter is stripped
-//    by the controller app to set severity, display, etc.
+// General Configuration Constants and Global Variables
+CRGBArray<NUM_LEDS> leds;                     // Addressable LED strip array
+Pattern *pattern;                             // Current LED Pattern
+WebServer server(80);                         // Web server running on port 80
+StaticJsonDocument<250> jsonDocument;         // Json document that can be worked with
+char jsonBuffer[250];                         // Json character array for serialized output
 
 
-void setup() {
-  delay(3000);    // safety startup delay
-  FastLED.addLeds<LED_TYPE,DATA_PIN,COLOR_ORDER>(leds, NUM_LEDS);
-  
-  Serial.begin(9600);
+/*
+  Connect to the WiFi network and set hostname
+*/
+void initWiFi() {
+  WiFi.setHostname(HOSTNAME);
 
-  /* Initialize elements */
+  Serial.println();
+  Serial.print("Connecting to ");
+  Serial.println(SSID);
+  Serial.println();
+
+  WiFi.begin(SSID, PWD);
+
+  while(WiFi.status() != WL_CONNECTED) {
+      delay(300);
+      Serial.print(".");
+  }
+
+  Serial.println();
+  Serial.print("WiFi connected with IP address: ");
+  Serial.println(WiFi.localIP());
+  Serial.println();
+}
+
+/*
+  Set HTTP server callback functions
+*/
+void initCallbacks() {
+  server.on("/", handleOnConnect);
+  server.on("/turnOff", HTTP_POST, handleTurnOff);
+  server.on("/setPattern", HTTP_POST, handleSetPattern);
+  server.onNotFound(handleNotFound);
+}
+
+/*
+  Set up LED strip and initial off state
+*/
+void initLEDs() {
+  FastLED.addLeds<LED_TYPE, DATA_PIN, COLOR_ORDER>(leds, NUM_LEDS);
   pattern = new PatternOff(leds, NUM_LEDS);
-  clearInputArray();
-  timeNoComm = millis();
-  
+  pattern->initPattern();
 }
 
-
-void loop() {
-  
-  /* No new pattern for a long time */
-  if((millis()-timeNoComm) > MAX_TIME && pattern->getPatternID() != 0) {
-    Serial.println("Error: no communication timeout");
-    delete pattern;
-    pattern = new PatternOff(leds, NUM_LEDS);
-    pattern->initPattern();
-  }
-  
-  if(readPattern()) {
-    Serial.println("Status: read in the pattern and its parameters");
-    if(setupPattern()) {
-      Serial.println("Status: identified the pattern");
-      timeNoComm = millis();
-      pattern->initPattern();
-    }
-  }
-
-
-  // Framerate will be controlled within each pattern classes update function
-  pattern->updatePattern();
+/*
+  Send an HTTP response with a simple json 'message' payload for server event handlers
+*/
+void sendJsonResponse(int code, char *msg) {
+  jsonDocument.clear();
+  jsonDocument["message"] = msg;
+  serializeJson(jsonDocument, jsonBuffer);
+  server.send(code, "application/json", jsonBuffer);
 }
 
-
-/* Handle serial input by monitoring the available buffer and reading it in when a full instruction is received */
-bool readPattern() {
-  /* Communication is either received as 24 bytes encased by <> or a communication receive error message
-   * is sent and instruction is disregarded */
-   
-  if(Serial.available() > 0) {
-    timeWaiting = millis();
-    clearInputArray();
-    
-    while(Serial.available() != MAX_INPUT + 2) {  // wait for full pattern instruction within timeout bounds
-      if((millis() - timeWaiting) > TIMEOUT) {
-        Serial.println("Error: pattern wait timeout");
-        clearBuffer();
-        return false;
-      }
-    }
-    /* At this point the full instruction is in the available buffer so test first delimiter */
-    
-    if((char) Serial.read() != '<') {
-      Serial.println("Error: first delimiter");
-      clearBuffer();
-      return false;
-    }
-    /* At this point the first character is the proper < delimiter so read in the available buffer values */
-
-    for(int i = 0; i < MAX_INPUT; ++i) {   // read 24 instruction parameter bytes into input array
-      input[i] = Serial.read();
-    }
-    /* At this point the characters have been read into the input array so test final delimiter*/
-   
-    if((char) Serial.read() != '>') {
-      Serial.println("Error: last delimiter");
-      clearBuffer();
-      return false;
-    }
-    /* At this point the final character is the proper > delimiter so assume everything is good to go */
-    return true;
+/*
+  Allocate and set LED's based on parsing the deserialized JSON document fields
+  Returns true if the pattern was parsed and set and false if it could not be set due to a parse error
+*/
+bool parseAndSetPattern() {
+  int id = jsonDocument["id"] || NULL;
+  if(!id) {
+    return false;
   }
-  return false;
-}
 
-
-/* Function to parse the entire pattern buffer, and set up the global pattern object */
-bool setupPattern() {  
-  switch(input[0]) {
+  switch(id) {
     case 0:
-      Serial.println("Status: pattern id matches off pattern");
       delete pattern;
       pattern = new PatternOff(leds, NUM_LEDS);
-      return true;
-      
-    case 1:
-      Serial.println("Status: pattern id matches solid pattern");
+
+    case 1: {
+      uint8_t h = jsonDocument["hue"] || NULL;
+      uint8_t s = jsonDocument["saturation"] || NULL;
+      uint8_t v = jsonDocument["value"] || NULL;  
+      if(!h || !s || !v) {
+        return false;
+      }
+
       delete pattern;
-      pattern = new PatternSolid(leds, NUM_LEDS, input[1], input[2], input[3]);
-      return true;
+      pattern = new PatternSolid(leds, NUM_LEDS, h, s, v);
+    }
 
     default:
-      Serial.println("Error: pattern id not found");
       return false;
+    
+    pattern->initPattern();
+    return true;
   }
 }
 
+/*
+  Handler to provide root connection response
+*/
+void handleOnConnect() {
+  sendJsonResponse(200, "Online and connected");
+}
 
-/* Function to clear the entire pattern buffer, setting it to default '-' values */
-void clearInputArray() {
-  Serial.println("Status: cleared input array");
-  for(int i = 0; i < MAX_INPUT; ++i) {
-    input[i] = byte('-');
+/*
+  Handler to turn the LEDs off; the server will continue running
+*/
+void handleTurnOff() {
+  delete pattern;
+  pattern = new PatternOff(leds, NUM_LEDS);
+  pattern->initPattern();
+  sendJsonResponse(200, "Turned LEDs off");
+}
+
+/*
+  Handler to set an LED pattern
+*/
+void handleSetPattern() {
+  if(server.hasArg("plain") == false) {
+    sendJsonResponse(400, "Unable to set pattern - argument error");
+  } else {
+    String body  = server.arg("plain");
+    DeserializationError error = deserializeJson(jsonDocument, body);
+    if(error) {
+      sendJsonResponse(400, "Unable to set pattern - deserialization error");
+      // Serial.println(error.f_str());
+    } else {
+      if(!parseAndSetPattern()) {
+        sendJsonResponse(400, "Unable to set pattern - parse error");
+      } else {
+        char successMsg[30];
+        sprintf(successMsg, "Pattern set to id = %d", pattern->getPatternID());
+        sendJsonResponse(200, successMsg);
+      }
+    }
   }
 }
 
-/* Function to clear the entire serial buffer */
-void clearBuffer() {
-  Serial.println("Status: cleared serial buffer");
-  do {
-    Serial.read();
-  } while(Serial.available() > 0);
+/*
+  Handler for unknown or invalid routes
+*/
+void handleNotFound() {
+  sendJsonResponse(404, "Could not find the requested resource");
+}
+
+
+/*
+  Arduino specific initialization function
+*/
+void setup() {
+  Serial.begin(115200);
+
+  // Initialize WiFi and configure HTTP callback server
+  initWiFi();
+  initCallbacks();
+  server.begin();
+  
+  // Initialize LEDs and configure startup state
+  initLEDs();
+}
+
+/*
+  Arduino specific looping function
+*/
+void loop() {
+  server.handleClient();
+  pattern->updatePattern();
 }
